@@ -4,6 +4,7 @@ import copy
 import functools
 import json
 import os
+import ssl
 from datetime import timedelta
 
 try:
@@ -65,7 +66,7 @@ class WebOsClient:
     ):
         """Initialize the client."""
         self.ip = ip
-        self.port = 3000
+        self.port = 3001
         self.key_file_path = key_file_path
         self.client_key = client_key
         self.command_count = 0
@@ -159,12 +160,16 @@ class WebOsClient:
     async def connect_handler(self, res):
         ws = None
         try:
+            # webOS uses self-signed certificates, thus we need to use an empty
+            # SSLContext to bypass validation errors.
+            ssl_context = ssl.SSLContext()
             ws = await asyncio.wait_for(
                 websockets.connect(
-                    f"ws://{self.ip}:{self.port}",
+                    f"wss://{self.ip}:{self.port}",
                     ping_interval=None,
                     close_timeout=self.timeout_connect,
                     max_size=None,
+                    ssl=ssl_context,
                 ),
                 timeout=self.timeout_connect,
             )
@@ -682,6 +687,7 @@ class WebOsClient:
             # open additional connection needed to send button commands
             # the url is dynamically generated and returned from the ep.INPUT_SOCKET
             # endpoint on the main connection
+            ssl_context = ssl.SSLContext()
             if self.input_connection is None:
                 sockres = await self.request(ep.INPUT_SOCKET)
                 inputsockpath = sockres.get("socketPath")
@@ -690,6 +696,7 @@ class WebOsClient:
                         inputsockpath,
                         ping_interval=None,
                         close_timeout=self.timeout_connect,
+                        ssl=ssl_context,
                     ),
                     timeout=self.timeout_connect,
                 )
